@@ -1,9 +1,7 @@
-from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 import pandas as pd
-import numpy as np
-import json
 from pathlib import Path
 
 app = FastAPI()
@@ -16,43 +14,42 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Relative path from metrics.py to the JSON file
-telemetry_file = Path(__file__).parent.parent/ "q-vercel-latency.json"
+# Path to telemetry file (adjust if needed)
+root = Path(__file__).parent
+telemetry_file = root / "q-vercel-latency.json"
 
-# Load telemetry data
-with open(telemetry_file) as f:
-    telemetry = pd.DataFrame(json.load(f))
+@app.post("/api/main")
+async def telemetry_endpoint(request: Request):
+    try:
+        payload = await request.json()
+        regions = payload.get("regions")
+        threshold = payload.get("threshold_ms")
 
-@app.post("/")
-async def metrics(request: Request):
-    body = await request.json()
-    regions = body.get("regions", [])
-    threshold = body.get("threshold_ms", 180)
-    
-    result = {}
-    for region in regions:
-        df = telemetry[telemetry["region"] == region]
-        if df.empty:
+        if not regions or threshold is None:
+            raise HTTPException(status_code=400, detail="Missing keys: regions or threshold_ms")
+
+        # Load telemetry JSON
+        data = pd.read_json(telemetry_file)
+
+        result = {}
+        for region in regions:
+            region_data = data[data["region"] == region]
+            avg_latency = region_data["latency_ms"].mean()
+            p95_latency = region_data["latency_ms"].quantile(0.95)
+            avg_uptime = region_data["uptime"].mean()
+            breaches = (region_data["latency_ms"] > threshold).sum()
+
             result[region] = {
-                "avg_latency": None,
-                "p95_latency": None,
-                "avg_uptime": None,
-                "breaches": 0
+                "avg_latency": round(avg_latency, 2),
+                "p95_latency": round(p95_latency, 2),
+                "avg_uptime": round(avg_uptime, 2),
+                "breaches": int(breaches)
             }
-            continue
-        
-        avg_latency = df["latency_ms"].mean()
-        p95_latency = np.percentile(df["latency_ms"], 95)
-        avg_uptime = df["uptime"].mean()
-        breaches = (df["latency_ms"] > threshold).sum()
-        
-        result[region] = {
-            "avg_latency": avg_latency,
-            "p95_latency": p95_latency,
-            "avg_uptime": avg_uptime,
-            "breaches": int(breaches)
-        }
-        
-    return JSONResponse(result)
+
+        return JSONResponse(content=result)
+
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"error": str(e)})
+
 
 
