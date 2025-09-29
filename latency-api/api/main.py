@@ -17,7 +17,7 @@ app.add_middleware(
 )
 
 # Relative path from metrics.py to the JSON file
-telemetry_file = Path(__file__).parent.parent / "q-vercel-latency.json"
+telemetry_file = Path(__file__).parent/ "q-vercel-latency.json"
 
 # Load telemetry data
 with open(telemetry_file) as f:
@@ -54,3 +54,4 @@ async def metrics(request: Request):
         }
         
     return JSONResponse(result)
+
