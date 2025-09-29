@@ -1,6 +1,6 @@
-from fastapi import FastAPI, HTTPException, Request
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 import pandas as pd
 from pathlib import Path
 
@@ -16,19 +16,19 @@ app.add_middleware(
 root = Path(__file__).parent
 telemetry_file = root / "q-vercel-latency.json"
 
-@app.post("/api/main")
+@app.post("/api/telemetry")
 async def telemetry_endpoint(request: Request):
     try:
-        payload = await request.json()
-        regions = payload.get("regions")
-        threshold = payload.get("threshold_ms")
+        body = await request.json()
+        regions = body.get("regions")
+        threshold = body.get("threshold_ms")
 
         if not regions or threshold is None:
             raise HTTPException(status_code=400, detail="Missing keys: regions or threshold_ms")
 
         data = pd.read_json(telemetry_file)
-
         result = {}
+
         for region in regions:
             region_data = data[data["region"] == region]
             avg_latency = region_data["latency_ms"].mean()
