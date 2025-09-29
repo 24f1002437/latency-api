@@ -6,7 +6,6 @@ from pathlib import Path
 
 app = FastAPI()
 
-# Enable CORS for POST requests from any origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,7 +13,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Path to telemetry file (adjust if needed)
 root = Path(__file__).parent
 telemetry_file = root / "q-vercel-latency.json"
 
@@ -28,7 +26,6 @@ async def telemetry_endpoint(request: Request):
         if not regions or threshold is None:
             raise HTTPException(status_code=400, detail="Missing keys: regions or threshold_ms")
 
-        # Load telemetry JSON
         data = pd.read_json(telemetry_file)
 
         result = {}
@@ -40,16 +37,14 @@ async def telemetry_endpoint(request: Request):
             breaches = (region_data["latency_ms"] > threshold).sum()
 
             result[region] = {
-                "avg_latency": round(avg_latency, 2),
-                "p95_latency": round(p95_latency, 2),
-                "avg_uptime": round(avg_uptime, 2),
+                "avg_latency": round(avg_latency, 2) if pd.notnull(avg_latency) else None,
+                "p95_latency": round(p95_latency, 2) if pd.notnull(p95_latency) else None,
+                "avg_uptime": round(avg_uptime, 2) if pd.notnull(avg_uptime) else None,
                 "breaches": int(breaches)
             }
 
         return JSONResponse(content=result)
-
+    except HTTPException as e:
+        return JSONResponse(status_code=e.status_code, content={"detail": e.detail})
     except Exception as e:
         return JSONResponse(status_code=500, content={"error": str(e)})
-
-
-
